@@ -1,0 +1,385 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>LineBot Route Simulation</title>
+<style>
+:root {
+  --bg: #f6f5f1; --surface: #ffffff; --fg: #1f1e1b; --muted: #6b6a64; --line: #dcdad2;
+  --going: #5f5e5a; --returning: #378add;
+  --base-fill: #e1f5ee; --base-stroke: #0f6e56; --base-text: #085041;
+  --x-fill: #faece7; --x-stroke: #993c1d; --x-text: #712b13;
+  --y-fill: #faeeda; --y-stroke: #854f0b; --y-text: #633806;
+  --j1-fill: #e6f1fb; --j1-stroke: #185fa5; --j1-text: #0c447c;
+  --robot: #d85a30; --accent: #0f6e56; --accent-fg: #ffffff;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1a1a18; --surface: #242422; --fg: #ecebe6; --muted: #a3a29a; --line: #3d3c38;
+    --going: #b4b2a9; --returning: #5aa0ea;
+    --base-fill: #0f3d33; --base-stroke: #5dcaa5; --base-text: #9fe1cb;
+    --x-fill: #4a2116; --x-stroke: #f0997b; --x-text: #f5c4b3;
+    --y-fill: #4a3410; --y-stroke: #fac775; --y-text: #fae3b5;
+    --j1-fill: #0c2f52; --j1-stroke: #85b7eb; --j1-text: #b5d4f4;
+    --robot: #f0997b; --accent: #5dcaa5; --accent-fg: #0f2d25;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1a1a18; --surface: #242422; --fg: #ecebe6; --muted: #a3a29a; --line: #3d3c38;
+  --going: #b4b2a9; --returning: #5aa0ea;
+  --base-fill: #0f3d33; --base-stroke: #5dcaa5; --base-text: #9fe1cb;
+  --x-fill: #4a2116; --x-stroke: #f0997b; --x-text: #f5c4b3;
+  --y-fill: #4a3410; --y-stroke: #fac775; --y-text: #fae3b5;
+  --j1-fill: #0c2f52; --j1-stroke: #85b7eb; --j1-text: #b5d4f4;
+  --robot: #f0997b; --accent: #5dcaa5; --accent-fg: #0f2d25;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-top: 20px; padding-bottom: 28px;
+}
+main { max-width: 760px; margin: 0 auto; display: grid; gap: 16px; min-width: 0; }
+h1 { font-size: 20px; margin: 0; font-weight: 600; text-wrap: balance; }
+.sub { color: var(--muted); margin: 2px 0 0; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px; min-width: 0; }
+.map-wrap { overflow-x: auto; }
+svg#map { display: block; width: 100%; height: auto; max-width: 100%; }
+svg#map text { font-family: inherit; }
+.robot circle { fill: var(--robot); stroke: var(--surface); stroke-width: 2; }
+.robot path { fill: var(--surface); }
+.trail { fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.trail.going { stroke: var(--robot); opacity: .55; }
+.trail.returning { stroke: var(--returning); opacity: .6; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 16px; color: var(--muted); font-size: 12px; margin-top: 8px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.swatch { width: 22px; height: 0; border-top: 3px solid var(--going); }
+.swatch.dash { border-top: 2px dashed var(--returning); }
+.controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+button {
+  font: inherit; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--fg); cursor: pointer;
+}
+button.primary { background: var(--accent); color: var(--accent-fg); border-color: transparent; }
+button:disabled { opacity: .45; cursor: default; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.pick { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+select { font: inherit; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); }
+select:disabled { opacity: .45; }
+.speed { display: flex; align-items: center; gap: 8px; color: var(--muted); margin-left: auto; min-width: 0; }
+.speed input { width: 140px; max-width: 100%; accent-color: var(--accent); }
+.label { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.now { font-size: 17px; font-weight: 600; }
+.status { display: grid; gap: 4px; }
+.log { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow-y: auto; font-variant-numeric: tabular-nums; }
+.log li { padding: 6px 0; border-bottom: 1px solid var(--line); display: flex; gap: 10px; }
+.log li:last-child { border-bottom: 0; }
+.log .n { color: var(--muted); min-width: 2.2em; }
+@media (max-width: 420px) {
+  .speed { margin-left: 0; width: 100%; }
+  .speed input { flex: 1; width: auto; }
+}
+.lamps { display: flex; flex-wrap: wrap; gap: 10px; }
+.lamp { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+.lamp::before { content: ""; width: 14px; height: 14px; border-radius: 50%; background: #3a3a36; }
+.lamp[data-on="true"] { color: var(--fg); }
+.lamp.r[data-on="true"]::before { background: #e24b4a; box-shadow: 0 0 8px #e24b4a; }
+.lamp.y[data-on="true"]::before { background: #ef9f27; box-shadow: 0 0 8px #ef9f27; }
+.lamp.g[data-on="true"]::before { background: #1d9e75; box-shadow: 0 0 8px #1d9e75; }
+</style>
+
+<main>
+  <header>
+    <h1>LineBot route simulation</h1>
+    <p class="sub">Base is the sender. Choose the receiver, press Item loaded, then Item received at the cabin. At base the robot stops for 3 s when it reads card C1:0D:BB:0A, then turns 180.</p>
+  </header>
+
+  <section class="card">
+    <div class="map-wrap">
+      <svg id="map" viewBox="0 0 680 450" role="img" aria-label="Route map: base, junction J1, cabin X and cabin Y">
+        <polyline points="180,228 330,228 330,96" fill="none" stroke="var(--going)" stroke-width="4" stroke-linejoin="round"/>
+        <polyline points="330,228 330,360" fill="none" stroke="var(--going)" stroke-width="4"/>
+        <polyline points="344,96 344,240 180,240" fill="none" stroke="var(--returning)" stroke-width="2" stroke-dasharray="6 5" stroke-linejoin="round"/>
+        <polyline points="344,360 344,240" fill="none" stroke="var(--returning)" stroke-width="2" stroke-dasharray="6 5"/>
+
+        <rect x="60" y="200" width="120" height="56" rx="8" fill="var(--base-fill)" stroke="var(--base-stroke)" stroke-width="0.5"/>
+        <text x="120" y="220" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="600" fill="var(--base-text)">Base</text>
+        <text x="120" y="240" text-anchor="middle" dominant-baseline="central" font-size="12" fill="var(--base-text)">Reception</text>
+        <text x="120" y="276" text-anchor="middle" font-size="11" fill="var(--base-text)">Base card: C1:0D:BB:0A</text>
+
+        <circle cx="330" cy="228" r="14" fill="var(--j1-fill)" stroke="var(--j1-stroke)" stroke-width="0.5"/>
+        <text x="330" y="228" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="600" fill="var(--j1-text)">J1</text>
+        <text x="320" y="290" text-anchor="end" font-size="11" fill="var(--j1-text)">J1 card: 64:D5:30:03</text>
+
+        <rect x="280" y="40" width="100" height="56" rx="8" fill="var(--x-fill)" stroke="var(--x-stroke)" stroke-width="0.5"/>
+        <text x="330" y="60" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="600" fill="var(--x-text)">X</text>
+        <text x="330" y="80" text-anchor="middle" dominant-baseline="central" font-size="12" fill="var(--x-text)">Cabin 1</text>
+
+        <rect x="280" y="360" width="100" height="56" rx="8" fill="var(--y-fill)" stroke="var(--y-stroke)" stroke-width="0.5"/>
+        <text x="330" y="380" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="600" fill="var(--y-text)">Y</text>
+        <text x="330" y="400" text-anchor="middle" dominant-baseline="central" font-size="12" fill="var(--y-text)">Cabin 2</text>
+
+        <g id="trails"></g>
+        <g id="robot" class="robot"><circle r="9"/><path d="M11 0 L-2 -5 L-2 5 Z"/></g>
+      </svg>
+    </div>
+    <div class="legend">
+      <span><i class="swatch"></i>Going</span>
+      <span><i class="swatch dash"></i>Returning</span>
+      <span>Robot</span>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="controls">
+      <label class="pick">Receiver
+        <select id="receiverSel"><option value="X">Cabin 1 (X)</option><option value="Y">Cabin 2 (Y)</option></select>
+      </label>
+      <button id="btnLoad" class="primary">Item loaded</button>
+      <button id="btnRecv" disabled>Item received</button>
+      <button id="btnObs">Obstacle ahead</button>
+      <button id="btnReset">Reset</button>
+      <label class="speed">Speed
+        <input id="speed" type="range" min="40" max="200" step="10" value="90" aria-label="Robot speed">
+      </label>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="label" style="margin-bottom:8px">RGY status lights</div>
+    <div class="lamps">
+      <span class="lamp r" id="lR" data-on="false">RED: obstacle, stop (D15)</span>
+      <span class="lamp y" id="lY" data-on="false">YELLOW: running (D2)</span>
+      <span class="lamp g" id="lG" data-on="false">GREEN: RFID stop (D4)</span>
+    </div>
+  </section>
+
+  <section class="card status">
+    <div class="label">Current step</div>
+    <div id="now" class="now" aria-live="polite">Standby at base</div>
+    <div id="receiver" class="sub">No delivery in progress</div>
+  </section>
+
+  <section class="card">
+    <div class="label" style="margin-bottom:6px">Event log</div>
+    <ol id="log" class="log"></ol>
+  </section>
+</main>
+
+<script>
+(function () {
+  // Waits and turns use real time. Movement uses the speed slider.
+  // Y is the mirror of X: right turn at J1 going out, left turn at J1 coming back.
+  var ROUTES = {
+    X: [
+      { t: 'move', pts: [[180,228],[330,228]], label: 'Going to J1' },
+      { t: 'wait', ms: 3000, label: 'J1: stop 3 s' },
+      { t: 'turn', to: -90, ms: 600, label: 'J1: turn left' },
+      { t: 'move', pts: [[330,228],[330,96]], label: 'Going to X (cabin 1)' },
+      { t: 'gate', label: 'At X: waiting for Item received' },
+      { t: 'turn', to: 90, ms: 1000, label: 'X: 180 degree turn' },
+      { t: 'move', pts: [[330,96],[344,96],[344,240]], label: 'Returning to J1', ret: true },
+      { t: 'wait', ms: 3000, label: 'J1: stop 3 s' },
+      { t: 'turn', to: 180, ms: 600, label: 'J1: turn right' },
+      { t: 'move', pts: [[344,240],[180,240]], label: 'Returning to base', ret: true },
+      { t: 'wait', ms: 3000, label: 'Base card C1:0D:BB:0A detected, stop 3 s' },
+      { t: 'turn', to: 0, ms: 1000, label: 'Base: 180 degree turn' }
+    ],
+    Y: [
+      { t: 'move', pts: [[180,228],[330,228]], label: 'Going to J1' },
+      { t: 'wait', ms: 3000, label: 'J1: stop 3 s' },
+      { t: 'turn', to: 90, ms: 600, label: 'J1: turn right' },
+      { t: 'move', pts: [[330,228],[330,360]], label: 'Going to Y (cabin 2)' },
+      { t: 'gate', label: 'At Y: waiting for Item received' },
+      { t: 'turn', to: -90, ms: 1000, label: 'Y: 180 degree turn' },
+      { t: 'move', pts: [[330,360],[344,360],[344,240]], label: 'Returning to J1', ret: true },
+      { t: 'wait', ms: 3000, label: 'J1: stop 3 s' },
+      { t: 'turn', to: -180, ms: 600, label: 'J1: turn left' },
+      { t: 'move', pts: [[344,240],[180,240]], label: 'Returning to base', ret: true },
+      { t: 'wait', ms: 3000, label: 'Base card C1:0D:BB:0A detected, stop 3 s' },
+      { t: 'turn', to: 0, ms: 1000, label: 'Base: 180 degree turn' }
+    ]
+  };
+
+  var RECEIVER = { X: 'Cabin 1 (X)', Y: 'Cabin 2 (Y)' };
+  var $ = function (id) { return document.getElementById(id); };
+  var btnLoad = $('btnLoad'), btnRecv = $('btnRecv'), btnReset = $('btnReset'), recvSel = $('receiverSel');
+  var speedEl = $('speed'), nowEl = $('now'), logEl = $('log');
+  var robot = $('robot'), trails = $('trails');
+  var receiverEl = $('receiver');
+  var btnObs = $('btnObs'), lamps = { r: $('lR'), y: $('lY'), g: $('lG') };
+  var obstacle = false;
+
+  var S = ROUTES.X, mode = 'standby', cur = null, idx = -1, pos = { x: 180, y: 228 }, ang = 0;
+  var speed = 90, last = 0, trailEl = null, trailPts = [], logN = 0;
+
+  function dist(a, b) { return Math.hypot(b[0] - a[0], b[1] - a[1]); }
+  function length(pts) {
+    var L = 0;
+    for (var i = 0; i < pts.length - 1; i++) L += dist(pts[i], pts[i + 1]);
+    return L;
+  }
+  function pointAt(pts, d) {
+    for (var i = 0; i < pts.length - 1; i++) {
+      var a = pts[i], b = pts[i + 1], L = dist(a, b) || 1;
+      if (d <= L || i === pts.length - 2) {
+        var t = Math.min(1, d / L);
+        return { x: a[0] + (b[0] - a[0]) * t, y: a[1] + (b[1] - a[1]) * t,
+                 a: Math.atan2(b[1] - a[1], b[0] - a[0]) * 180 / Math.PI };
+      }
+      d -= L;
+    }
+    var p = pts[pts.length - 1];
+    return { x: p[0], y: p[1], a: ang };
+  }
+
+  function log(msg) {
+    logN += 1;
+    var li = document.createElement('li');
+    var n = document.createElement('span'); n.className = 'n';
+    n.textContent = String(logN).padStart(2, '0');
+    var t = document.createElement('span'); t.textContent = msg;
+    li.appendChild(n); li.appendChild(t);
+    logEl.insertBefore(li, logEl.firstChild);
+  }
+
+  function newTrail(ret) {
+    trailEl = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+    trailEl.setAttribute('class', 'trail ' + (ret ? 'returning' : 'going'));
+    trails.appendChild(trailEl);
+    trailPts = [pos.x + ',' + pos.y];
+  }
+  function addTrail() {
+    if (!trailEl) return;
+    var s = pos.x + ',' + pos.y;
+    if (trailPts[trailPts.length - 1] === s) return;
+    trailPts.push(s);
+    trailEl.setAttribute('points', trailPts.join(' '));
+  }
+  function draw() {
+    robot.setAttribute('transform', 'translate(' + pos.x + ',' + pos.y + ') rotate(' + ang + ')');
+  }
+  function updateButtons() {
+    btnLoad.disabled = mode !== 'standby';
+    recvSel.disabled = mode !== 'standby';
+    btnRecv.disabled = mode !== 'gate';
+  }
+
+  function begin(i) {
+    idx = i;
+    cur = S[i];
+    cur.el = 0; cur.dist = 0;
+    if (cur.t === 'move') { cur.L = length(cur.pts); newTrail(!!cur.ret); }
+    if (cur.t === 'turn') cur.from = ang;
+    mode = cur.t === 'gate' ? 'gate' : 'run';
+    nowEl.textContent = cur.label;
+    log(cur.label);
+    updateButtons();
+  }
+
+  function next() {
+    if (idx + 1 < S.length) { begin(idx + 1); return; }
+    cur = null; idx = -1; mode = 'standby';
+    pos = { x: 180, y: 228 }; ang = 0;
+    nowEl.textContent = 'Standby at base';
+    log('Back on standby at base.');
+    updateButtons();
+  }
+
+  function reset() {
+    cur = null; idx = -1; mode = 'standby';
+    pos = { x: 180, y: 228 }; ang = 0;
+    trails.innerHTML = ''; trailEl = null; trailPts = [];
+    logEl.innerHTML = ''; logN = 0;
+    receiverEl.textContent = 'No delivery in progress';
+    btnRecv.textContent = 'Item received';
+    nowEl.textContent = 'Standby at base';
+    draw();
+    obstacle = false;
+    btnObs.textContent = 'Obstacle ahead';
+    btnObs.classList.remove('primary');
+    paintLamps();
+    updateButtons();
+  }
+
+  function start(key) {
+    if (mode !== 'standby') return;
+    reset();
+    S = ROUTES[key];
+    receiverEl.textContent = 'Receiver: ' + RECEIVER[key];
+    btnRecv.textContent = 'Item received at ' + key;
+    log('Item loaded for ' + (key === 'X' ? 'cabin 1 (X)' : 'cabin 2 (Y)') + '. Robot starts.');
+    begin(0);
+  }
+
+  function update(dt) {
+    if (obstacle) return;
+    if (mode !== 'run' || !cur) return;
+    var c = cur;
+    if (c.t === 'move') {
+      c.dist += speed * dt;
+      if (c.dist >= c.L) {
+        var end = c.pts[c.pts.length - 1], prev = c.pts[c.pts.length - 2];
+        ang = Math.atan2(end[1] - prev[1], end[0] - prev[0]) * 180 / Math.PI;
+        pos = { x: end[0], y: end[1] };
+        addTrail();
+        next();
+      } else {
+        pos = pointAt(c.pts, c.dist);
+        ang = pos.a;
+        addTrail();
+      }
+    } else if (c.t === 'turn') {
+      c.el += dt * 1000;
+      var k = Math.min(1, c.el / c.ms);
+      ang = c.from + (c.to - c.from) * k;
+      if (k >= 1) next();
+    } else if (c.t === 'wait') {
+      c.el += dt * 1000;
+      if (c.el >= c.ms) next();
+    }
+  }
+
+  function paintLamps() {
+    var running = mode === 'run' && cur && (cur.t === 'move' || cur.t === 'turn');
+    var stoppedAtRfid = mode === 'gate' || (mode === 'run' && cur && cur.t === 'wait');
+    lamps.r.dataset.on = String(obstacle);
+    lamps.y.dataset.on = String(!obstacle && !!running);
+    lamps.g.dataset.on = String(!obstacle && !!stoppedAtRfid);
+  }
+
+  function toggleObstacle() {
+    obstacle = !obstacle;
+    btnObs.textContent = obstacle ? 'Clear obstacle' : 'Obstacle ahead';
+    btnObs.classList.toggle('primary', obstacle);
+    log(obstacle ? 'Obstacle detected (10 cm). Robot stops.' : 'Obstacle cleared. Robot continues.');
+  }
+
+  function frame(t) {
+    var dt = Math.min(0.05, (t - last) / 1000 || 0);
+    last = t;
+    update(dt);
+    draw();
+    paintLamps();
+    requestAnimationFrame(frame);
+  }
+
+  btnLoad.addEventListener('click', function () { start(recvSel.value); });
+  btnRecv.addEventListener('click', function () {
+    if (mode !== 'gate') return;
+    log('Item received.');
+    next();
+  });
+  btnReset.addEventListener('click', reset);
+  btnObs.addEventListener('click', toggleObstacle);
+  speedEl.addEventListener('input', function () { speed = Number(speedEl.value); });
+
+  reset();
+  requestAnimationFrame(function (t) { last = t; requestAnimationFrame(frame); });
+})();
+</script>
+
+</body></html>
